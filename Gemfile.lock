@@ -183,11 +183,11 @@ GEM
     sshkit (1.18.2)
       net-scp (>= 1.1.2)
       net-ssh (>= 2.8.0)
-    statesman (4.1.0)
     tapp (1.5.1)
       thor
     thor (0.20.3)
     thread_safe (0.3.6)
+    transitions (1.2.1)
     tzinfo (1.2.5)
       thread_safe (~> 0.1)
     web-console (3.7.0)
@@ -219,8 +219,8 @@ DEPENDENCIES
   spring-commands-rspec
   spring-watcher-listen (~> 2.0.0)
   sqlite3
-  statesman
   tapp
+  transitions
   web-console (>= 3.3.0)
 
 RUBY VERSION
