@@ -218,7 +218,6 @@ DEPENDENCIES
   sqlite3
   statesman
   tapp
-  tzinfo-data
   web-console (>= 3.3.0)
 
 RUBY VERSION
