@@ -7,6 +7,7 @@ gem 'capistrano-rails', group: :development
 gem 'bootsnap', '>= 1.1.0', require: false
 gem 'transitions', require: ['transitions', 'active_model/transitions']
 gem 'tapp'
+gem 'active_interaction'
 
 group :development, :test do
   gem 'byebug', platforms: [:mri, :mingw, :x64_mingw]
@@ -24,5 +25,6 @@ group :test do
   gem 'capybara', '>= 2.15'
   gem 'selenium-webdriver'
   gem 'chromedriver-helper'
+  gem 'turnip'
   gem 'rspec-rails'
 end
