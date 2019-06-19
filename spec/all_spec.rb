@@ -25,8 +25,6 @@ RSpec.describe '全部' do
     Order.transaction do
       order.accept!
       order.bills.create(
-        state: 'undetermined',
-        billing_agency_state: 'none',
         payment_method: 'invoice',
         orderer: order.orderer,
         company: order.company
@@ -39,15 +37,15 @@ RSpec.describe '全部' do
   end
 
   def 下請が着工報告(_, order, _)
-    order.update(construction_state: 'started')
+    order.start!
   end
 
   def 下請が完工報告(_, order, _)
-    order.update(construction_state: 'completed')
+    order.complete!
   end
 
   def 元請が完工を承認(_, order, _)
-    order.update(construction_state: 'completion_approved')
+    order.approve!
   end
 
   def 元請が請求金額を入力(_, bill, options)
@@ -55,22 +53,19 @@ RSpec.describe '全部' do
   end
 
   def 元請が金額確定(_, bill, options)
-    bill.update(
-      state: 'determined',
-      bill_on: options[:bill_on]
-    )
+    Bill.transaction do
+      bill.determine!
+      bill.update(bill_on: options[:bill_on])
+    end
   end
 
   def 下請が請求を確定(_, bill, _)
-    Order.transaction do
-      bill.update!(
-        state: 'billed',
-        billing_agency_state: 'waiting'
-      )
+    Bill.transaction do
+      bill.bill!
+      bill.wait!
 
       # プラットフォーム => 下請
       bill.receivables.create(
-        state: 'will_pay',
         orderer: プラットフォーム,
         company: 下請,
         price: bill.price,
@@ -79,7 +74,6 @@ RSpec.describe '全部' do
 
       # 元請 => プラットフォーム
       bill.receivables.create(
-        state: 'will_pay',
         orderer: 元請,
         company: プラットフォーム,
         price: bill.price,
@@ -89,11 +83,11 @@ RSpec.describe '全部' do
   end
 
   def プラットフォームが元請へ請求書送付(_, bill, _)
-    bill.update(billing_agency_state: 'sent')
+    bill.send_bill!
   end
 
   def 元請がプラットフォームへの入金指示(_, receivable, _)
-    receivable.update(state: 'paid')
+    receivable.pay!
   end
 
   def プラットフォームが支払予定取り込み(_, _, _)

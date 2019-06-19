@@ -5,7 +5,7 @@ gem 'sqlite3'
 gem 'puma', '~> 3.11'
 gem 'capistrano-rails', group: :development
 gem 'bootsnap', '>= 1.1.0', require: false
-gem 'transitions', require: ['transitions', 'active_model/transitions']
+gem 'aasm'
 gem 'tapp'
 gem 'active_interaction'
 

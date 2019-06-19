@@ -1,6 +1,8 @@
 GEM
   remote: https://rubygems.org/
   specs:
+    aasm (5.0.5)
+      concurrent-ruby (~> 1.0)
     actioncable (5.2.3)
       actionpack (= 5.2.3)
       nio4r (~> 2.0)
@@ -200,7 +202,6 @@ GEM
       thor
     thor (0.20.3)
     thread_safe (0.3.6)
-    transitions (1.2.1)
     turnip (4.0.1)
       gherkin (~> 6.0.17)
       rspec (>= 3.0, < 4.0)
@@ -221,6 +222,7 @@ PLATFORMS
   ruby
 
 DEPENDENCIES
+  aasm
   active_interaction
   bootsnap (>= 1.1.0)
   byebug
@@ -237,7 +239,6 @@ DEPENDENCIES
   spring-watcher-listen (~> 2.0.0)
   sqlite3
   tapp
-  transitions
   turnip
   web-console (>= 3.3.0)
 
