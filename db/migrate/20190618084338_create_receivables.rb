@@ -6,6 +6,7 @@ class CreateReceivables < ActiveRecord::Migration[5.2]
       t.date :pay_on
       t.references :company, foreign_key: true
       t.references :orderer, foreign_key: true
+      t.references :bill, foreign_key: true
 
       t.timestamps
     end

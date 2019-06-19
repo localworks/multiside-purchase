@@ -14,14 +14,17 @@ ActiveRecord::Schema.define(version: 2019_06_18_084338) do
 
   create_table "bills", force: :cascade do |t|
     t.string "state"
+    t.string "billing_agency_state"
     t.string "payment_method"
     t.integer "price"
     t.date "bill_on"
     t.integer "company_id"
     t.integer "orderer_id"
+    t.integer "order_id"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["company_id"], name: "index_bills_on_company_id"
+    t.index ["order_id"], name: "index_bills_on_order_id"
     t.index ["orderer_id"], name: "index_bills_on_orderer_id"
   end
 
@@ -42,7 +45,7 @@ ActiveRecord::Schema.define(version: 2019_06_18_084338) do
 
   create_table "orders", force: :cascade do |t|
     t.string "state"
-    t.string "shipping_state"
+    t.string "construction_state"
     t.integer "price"
     t.integer "company_id"
     t.integer "orderer_id"
@@ -58,8 +61,10 @@ ActiveRecord::Schema.define(version: 2019_06_18_084338) do
     t.date "pay_on"
     t.integer "company_id"
     t.integer "orderer_id"
+    t.integer "bill_id"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.index ["bill_id"], name: "index_receivables_on_bill_id"
     t.index ["company_id"], name: "index_receivables_on_company_id"
     t.index ["orderer_id"], name: "index_receivables_on_orderer_id"
   end
