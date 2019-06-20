@@ -5,7 +5,7 @@ RSpec.describe '全部' do
   let(:下請) { Company.create!(name: '下請') }
   let(:プラットフォーム) { Company.create!(name: 'プラットフォーム') }
 
-  def step(action, who, what = nil, options = nil)
+  def step(action, who, what = nil, options = {})
     p [action, who.name, what.try(:name) || what.to_s, options]
 
     if respond_to?(action)
@@ -13,8 +13,8 @@ RSpec.describe '全部' do
     end
   end
 
-  def 元請が発注を作成(_, _, _)
-    Order.create!(company: 下請, orderer: 元請)
+  def 元請が発注を作成(_, _, options)
+    Order.create!(company: 下請, orderer: 元請, price: options[:price])
   end
 
   def 元請が発注を送信(_, order, _)
@@ -26,6 +26,7 @@ RSpec.describe '全部' do
       order.accept!
       order.bills.create(
         payment_method: 'invoice',
+        price: order.price,
         orderer: order.orderer,
         company: order.company
         )
@@ -37,7 +38,18 @@ RSpec.describe '全部' do
   end
 
   def 下請が着工報告(_, order, _)
-    order.start!
+    Order.transaction do
+      order.start!
+      bill = order.bills.last
+      if bill.payment_method == 'start_and_complete'
+        bill.receivables.create(
+          orderer: プラットフォーム,
+          company: order.company,
+          price: (bill.price * 0.3 * 0.95).ceil,
+          pay_on: Time.zone.today
+        )
+      end
+    end
   end
 
   def 下請が完工報告(_, order, _)
@@ -64,20 +76,37 @@ RSpec.describe '全部' do
       bill.bill!
       bill.wait!
 
+      pay_price = nil
+      receive_price = nil
+      pay_on = nil
+      if bill.payment_method == 'start_and_complete'
+        # TODO: 本番では厳密な計算を実装する
+        pay_price = (bill.price * 0.7 * 0.95).ceil
+        receive_price = bill.price
+        pay_on = bill.bill_on
+      elsif bill.payment_method == 'complete'
+        pay_price = (bill.price * 0.95).ceil
+        receive_price = bill.price
+        pay_on = bill.bill_on
+      elsif bill.payment_method == 'invoice'
+        pay_price = receive_price = bill.price
+        pay_on = (bill.bill_on + 1.month).end_of_month
+      end
+
       # プラットフォーム => 下請
       bill.receivables.create(
         orderer: プラットフォーム,
         company: 下請,
-        price: bill.price,
-        pay_on: (bill.bill_on + 1.month).end_of_month
+        price: pay_price,
+        pay_on: pay_on
       )
 
       # 元請 => プラットフォーム
       bill.receivables.create(
         orderer: 元請,
         company: プラットフォーム,
-        price: bill.price,
-        pay_on: (bill.bill_on + 1.month).end_of_month
+        price: receive_price,
+        pay_on: pay_on
       )
     end
   end
@@ -164,11 +193,9 @@ RSpec.describe '全部' do
       price: 30_000,
       bill_on: Date.today
 
-
     step '下請が請求を確定', 下請, 支払依頼1,
       orderer: 元請,
-      company: 下請,
-      pay_on: (支払依頼1.bill_on + 1.month).end_of_month
+      company: 下請
 
     check 支払依頼1,
       state: 'billed',
@@ -208,6 +235,127 @@ RSpec.describe '全部' do
     step 'プラットフォームが支払予定取り込み', プラットフォーム
 
     check 支払1.reload,
+      state: 'paid'
+  end
+
+  it 'CASE5' do
+    step '元請が発注を作成', 元請, nil, price: 30_000
+
+    発注 = Order.first
+
+    check 発注,
+      state: 'created',
+      price: 30_000,
+      construction_state: 'not_started'
+
+    step '元請が発注を送信', 元請, 発注
+
+    check 発注,
+      state: 'received',
+      construction_state: 'not_started'
+
+    step '下請が発注を承認', 下請, 発注
+
+    check 発注,
+      state: 'accepted',
+      construction_state: 'not_started'
+
+    支払依頼1 = 発注.bills.first
+
+    check 支払依頼1,
+      state: 'undetermined',
+      billing_agency_state: 'none',
+      payment_method: 'invoice',
+      price: 30_000,
+      bill_on: nil
+
+    step '下請が支払方法を選択', 下請, 支払依頼1, payment_method: 'start_and_complete'
+
+    check 支払依頼1,
+      state: 'undetermined',
+      price: 30_000,
+      payment_method: 'start_and_complete'
+
+    step '下請が着工報告', 下請, 発注
+
+    check 発注,
+      construction_state: 'started'
+
+    支払1 = 支払依頼1.receivables.first
+
+    check 支払1,
+      state: 'will_pay',
+      orderer: プラットフォーム,
+      company: 下請,
+      price: 8550,
+      pay_on: Time.zone.today
+
+    step 'プラットフォームが支払予定取り込み', プラットフォーム
+
+    check 支払1.reload,
+      state: 'paid'
+
+    step '下請が完工報告', 下請, 発注
+
+    check 発注,
+      construction_state: 'completed'
+
+    step '元請が完工を承認', 元請, 発注
+
+    check 発注,
+      construction_state: 'completion_approved'
+
+
+    step '元請が金額確定', 元請, 支払依頼1, bill_on: Date.today
+
+    check 支払依頼1,
+      state: 'determined',
+      price: 30_000,
+      bill_on: Date.today
+
+    step '下請が請求を確定', 下請, 支払依頼1,
+      orderer: 元請,
+      company: 下請
+
+    check 支払依頼1,
+      state: 'billed',
+      billing_agency_state: 'waiting'
+
+    支払2 = 支払依頼1.receivables[1] # TODO: ちゃんとした絞り込みが必要そう
+    支払3 = 支払依頼1.receivables[2]
+
+    check 支払2,
+      state: 'will_pay',
+      orderer: プラットフォーム,
+      company: 下請,
+      price: 19_950,
+      pay_on: Time.zone.today
+
+    check 支払3,
+      state: 'will_pay',
+      orderer: 元請,
+      company: プラットフォーム,
+      price: 30_000,
+      pay_on: Time.zone.today
+
+
+    step 'プラットフォームが元請へ請求書送付', プラットフォーム, 支払依頼1
+
+    check 支払依頼1,
+      state: 'billed',
+      billing_agency_state: 'sent'
+
+    # NOTE: システム上では特に行うことは無いため、コメントアウト
+    # step 'プラットフォームが入金予定取り込み', プラットフォーム
+
+    step '元請がプラットフォームへの入金指示', 元請, 支払3
+
+    check 支払3.reload,
+      state: 'paid'
+
+    step 'プラットフォームが支払予定取り込み', プラットフォーム
+
+    check 支払2.reload,
       state: 'paid'
   end
 end
