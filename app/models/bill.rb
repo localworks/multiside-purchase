@@ -27,7 +27,7 @@ class Bill < ApplicationRecord
     state :sent                # 請求書送付済
 
     event :wait do
-      transitions to: :waiting, from: :none
+      transitions to: :waiting, from: :none, gurad: :determined?
     end
 
     event :send_bill do

@@ -27,7 +27,7 @@ class Order < ApplicationRecord
     state :completion_approved
 
     event :start do
-      transitions to: :started, from: :not_started
+      transitions to: :started, from: :not_started, guard: :accepted?
     end
 
     event :complete do

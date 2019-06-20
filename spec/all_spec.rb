@@ -1,4 +1,5 @@
 require 'rails_helper'
+require 'aasm/rspec'
 
 RSpec.describe '全部' do
   let(:元請) { Company.create!(name: '元請') }
@@ -157,7 +158,11 @@ RSpec.describe '全部' do
 
   def check(what, options = {})
     options.each do |key, value|
-      expect(what.send(key)).to eq value
+      if key == :state || key.to_s.end_with?('_state')
+        expect(what).to have_state(value).on(key)
+      else
+        expect(what.send(key)).to eq value
+      end
     end
   end
 
