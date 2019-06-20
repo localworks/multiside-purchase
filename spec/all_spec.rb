@@ -213,9 +213,7 @@ RSpec.describe '全部' do
       price: 30_000,
       bill_on: Date.today
 
-    step '下請が請求を確定', 下請, 支払依頼1,
-      orderer: 元請,
-      company: 下請
+    step '下請が請求を確定', 下請, 支払依頼1
 
     check 支払依頼1,
       state: 'billed',
@@ -322,9 +320,7 @@ RSpec.describe '全部' do
       price: 30_000,
       bill_on: Time.zone.today
 
-    step '下請が請求を確定', 下請, 支払依頼1,
-      orderer: 元請_決済代行なし,
-      company: 下請
+    step '下請が請求を確定', 下請, 支払依頼1
 
     check 支払依頼1,
       state: 'billed',
@@ -345,6 +341,113 @@ RSpec.describe '全部' do
     step '元請が下請への入金指示', 元請_決済代行なし, 支払1
 
     check 支払1,
+      state: 'paid'
+  end
+
+  it 'CASE4' do
+    step '元請が発注を作成', 元請, nil, company: 下請
+
+    発注 = Order.first
+
+    check 発注,
+      state: 'created',
+      construction_state: 'not_started'
+
+    step '元請が発注を送信', 元請, 発注
+
+    check 発注,
+      state: 'received',
+      construction_state: 'not_started'
+
+    step '下請が発注を承認', 下請, 発注
+
+    check 発注,
+      state: 'accepted',
+      construction_state: 'not_started'
+
+    支払依頼1 = 発注.bills.first
+
+    check 支払依頼1,
+      state: 'undetermined',
+      billing_agency_state: 'none',
+      payment_method: 'invoice',
+      price: nil,
+      bill_on: nil
+
+    step '下請が支払方法を選択', 下請, 支払依頼1, payment_method: 'complete'
+
+    check 支払依頼1,
+      state: 'undetermined',
+      price: nil,
+      payment_method: 'complete'
+
+    step '下請が着工報告', 下請, 発注
+
+    check 発注,
+      construction_state: 'started'
+
+    step '下請が完工報告', 下請, 発注
+
+    check 発注,
+      construction_state: 'completed'
+
+    step '元請が完工を承認', 元請, 発注
+
+    check 発注,
+      construction_state: 'completion_approved'
+
+    step '元請が請求金額を入力', 元請, 支払依頼1, price: 30_000
+
+    check 支払依頼1,
+      price: 30_000
+
+    step '元請が金額確定', 元請, 支払依頼1, bill_on: Time.zone.today
+
+    check 支払依頼1,
+      state: 'determined',
+      price: 30_000,
+      bill_on: Time.zone.today
+
+    step '下請が請求を確定', 下請, 支払依頼1
+
+    check 支払依頼1,
+      state: 'billed',
+      billing_agency_state: 'waiting'
+
+    支払1 = 支払依頼1.receivables.first
+    支払2 = 支払依頼1.receivables.last
+
+    check 支払1,
+      state: 'will_pay',
+      orderer: プラットフォーム,
+      company: 下請,
+      price: 28_500,
+      pay_on: Time.zone.today
+
+    check 支払2,
+      state: 'will_pay',
+      orderer: 元請,
+      company: プラットフォーム,
+      price: 30_000,
+      pay_on: Time.zone.today
+
+    step 'プラットフォームが元請へ請求書送付', プラットフォーム, 支払依頼1
+
+    check 支払依頼1,
+      state: 'billed',
+      billing_agency_state: 'sent'
+
+    # NOTE: システム上では特に行うことは無いため、コメントアウト
+    # step 'プラットフォームが入金予定取り込み', プラットフォーム
+
+    step '元請がプラットフォームへの入金指示', 元請, 支払2
+
+    check 支払2.reload,
+      state: 'paid'
+
+    step 'プラットフォームが支払予定取り込み', プラットフォーム
+
+    check 支払1.reload,
       state: 'paid'
   end
 
@@ -425,9 +528,7 @@ RSpec.describe '全部' do
       price: 30_000,
       bill_on: Date.today
 
-    step '下請が請求を確定', 下請, 支払依頼1,
-      orderer: 元請,
-      company: 下請
+    step '下請が請求を確定', 下請, 支払依頼1
 
     check 支払依頼1,
       state: 'billed',
