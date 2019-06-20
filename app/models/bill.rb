@@ -1,6 +1,7 @@
 class Bill < ApplicationRecord
   include AASM
 
+  belongs_to :order
   belongs_to :company
   belongs_to :orderer, class_name: 'Company'
   has_many :receivables
