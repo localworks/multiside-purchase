@@ -4,6 +4,7 @@ RSpec.describe '全部' do
   let(:元請) { Company.create!(name: '元請') }
   let(:下請) { Company.create!(name: '下請') }
   let(:プラットフォーム) { Company.create!(name: 'プラットフォーム') }
+  let(:元請_決済代行なし) { Company.create!(name: '元請(決済代行なし)', use_agency: false) }
 
   def step(action, who, what = nil, options = {})
     p [action, who.name, what.try(:name) || what.to_s, options]
@@ -13,8 +14,11 @@ RSpec.describe '全部' do
     end
   end
 
-  def 元請が発注を作成(_, _, options)
-    Order.create!(company: 下請, orderer: 元請, price: options[:price])
+  def 元請が発注を作成(orderer, _, options)
+    Order.create!(
+      orderer: orderer,
+      company: options[:company],
+      price: options[:price])
   end
 
   def 元請が発注を送信(_, order, _)
@@ -74,7 +78,6 @@ RSpec.describe '全部' do
   def 下請が請求を確定(_, bill, _)
     Bill.transaction do
       bill.bill!
-      bill.wait!
 
       pay_price = nil
       receive_price = nil
@@ -93,17 +96,30 @@ RSpec.describe '全部' do
         pay_on = (bill.bill_on + 1.month).end_of_month
       end
 
+      # 決済代行なしの場合は元請から下請への支払いレコードを作成して終了
+      unless bill.orderer.use_agency
+        bill.receivables.create(
+          orderer: bill.orderer,
+          company: bill.company,
+          price: pay_price,
+          pay_on: pay_on
+        )
+        return
+      end
+
+      bill.wait!
+
       # プラットフォーム => 下請
       bill.receivables.create(
         orderer: プラットフォーム,
-        company: 下請,
+        company: bill.company,
         price: pay_price,
         pay_on: pay_on
       )
 
       # 元請 => プラットフォーム
       bill.receivables.create(
-        orderer: 元請,
+        orderer: bill.orderer,
         company: プラットフォーム,
         price: receive_price,
         pay_on: pay_on
@@ -124,6 +140,10 @@ RSpec.describe '全部' do
     Receivable.where(orderer: プラットフォーム, state: 'will_pay').update(state: 'paid')
   end
 
+  def 元請が下請への入金指示(_, receivable, _)
+    receivable.pay!
+  end
+
   def check(what, options = {})
     options.each do |key, value|
       expect(what.send(key)).to eq value
@@ -131,7 +151,7 @@ RSpec.describe '全部' do
   end
 
   it 'CASE1' do
-    step '元請が発注を作成', 元請
+    step '元請が発注を作成', 元請, nil, company: 下請
 
     発注 = Order.first
 
@@ -238,8 +258,100 @@ RSpec.describe '全部' do
       state: 'paid'
   end
 
+  it 'CASE3' do
+    step '元請が発注を作成', 元請_決済代行なし, nil, company: 下請
+
+    発注 = Order.first
+
+    check 発注,
+      state: 'created',
+      construction_state: 'not_started'
+
+    step '元請が発注を送信', 元請_決済代行なし, 発注
+
+    check 発注,
+      state: 'received',
+      construction_state: 'not_started'
+
+    step '下請が発注を承認', 下請, 発注
+
+    check 発注,
+      state: 'accepted',
+      construction_state: 'not_started'
+
+    支払依頼1 = 発注.bills.first
+
+    check 支払依頼1,
+      state: 'undetermined',
+      billing_agency_state: 'none',
+      payment_method: 'invoice',
+      price: nil,
+      bill_on: nil
+
+    # NOTE: 決済代行がない場合、支払方法は通常サイト確定
+    # UIでどうするかは別途確認
+
+    check 支払依頼1,
+      state: 'undetermined',
+      payment_method: 'invoice'
+
+    step '下請が着工報告', 下請, 発注
+
+    check 発注,
+      construction_state: 'started'
+
+    step '下請が完工報告', 下請, 発注
+
+    check 発注,
+      construction_state: 'completed'
+
+    step '元請が完工を承認', 元請_決済代行なし, 発注
+
+    check 発注,
+      construction_state: 'completion_approved'
+
+    step '元請が請求金額を入力', 元請_決済代行なし, 支払依頼1, price: 30_000
+
+    check 支払依頼1,
+      price: 30_000
+
+    step '元請が金額確定', 元請_決済代行なし, 支払依頼1, bill_on: Time.zone.today
+
+    check 支払依頼1,
+      state: 'determined',
+      price: 30_000,
+      bill_on: Time.zone.today
+
+    step '下請が請求を確定', 下請, 支払依頼1,
+      orderer: 元請_決済代行なし,
+      company: 下請
+
+    check 支払依頼1,
+      state: 'billed',
+      billing_agency_state: 'none'
+
+    支払1 = 支払依頼1.receivables.first
+
+    check 支払1,
+      state: 'will_pay',
+      orderer: 元請_決済代行なし,
+      company: 下請,
+      price: 30_000,
+      pay_on: (支払依頼1.bill_on + 1.month).end_of_month
+
+    # NOTE: システム上では特に行うことは無いため、コメントアウト
+    # step '下請が元請へ請求書送付', 下請, 支払依頼1
+
+    step '元請が下請への入金指示', 元請_決済代行なし, 支払1
+
+    check 支払1,
+      state: 'paid'
+  end
+
   it 'CASE5' do
-    step '元請が発注を作成', 元請, nil, price: 30_000
+    step '元請が発注を作成', 元請, nil,
+      company: 下請,
+      price: 30_000
 
     発注 = Order.first
 
