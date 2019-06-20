@@ -584,7 +584,7 @@ RSpec.describe '全部' do
   end
 
   it 'CASE2' do
-    step '元請が発注を作成', 元請
+    step '元請が発注を作成', 元請, nil, company: 下請
 
     発注 = Order.first
 
@@ -759,7 +759,7 @@ RSpec.describe '全部' do
   end
 
   it 'CASE7' do
-    step '元請が発注を作成', 元請
+    step '元請が発注を作成', 元請_決済代行なし, nil, company: 下請
 
     発注 = Order.first
 
@@ -767,7 +767,7 @@ RSpec.describe '全部' do
       state: 'created',
       construction_state: 'not_started'
 
-    step '元請が発注を送信', 元請, 発注
+    step '元請が発注を送信', 元請_決済代行なし, 発注
 
     check 発注,
       state: 'received',
@@ -796,15 +796,14 @@ RSpec.describe '全部' do
     check 発注,
       construction_state: 'started'
 
-
     ###### 月末（初月） #####
 
-    step '元請が請求金額を入力', 元請, 支払依頼1, price: 20_000
+    step '元請が請求金額を入力', 元請_決済代行なし, 支払依頼1, price: 20_000
 
     check 支払依頼1,
       price: 20_000
 
-    step '元請が金額確定', 元請, 支払依頼1, bill_on: Date.today
+    step '元請が金額確定', 元請_決済代行なし, 支払依頼1, bill_on: Date.today
 
     check 支払依頼1,
       state: 'determined',
@@ -812,29 +811,12 @@ RSpec.describe '全部' do
       bill_on: Date.today
 
     step '下請が請求を確定', 下請, 支払依頼1,
-      orderer: 元請,
+      orderer: 元請_決済代行なし,
       company: 下請
 
     check 支払依頼1,
       state: 'billed',
-      billing_agency_state: 'waiting'
-
-    支払1 = 支払依頼1.receivables.first
-    支払2 = 支払依頼1.receivables.last
-
-    check 支払1,
-      state: 'will_pay',
-      orderer: プラットフォーム,
-      company: 下請,
-      price: 20_000,
-      pay_on: (支払依頼1.bill_on + 1.month).end_of_month
-
-    check 支払2,
-      state: 'will_pay',
-      orderer: 元請,
-      company: プラットフォーム,
-      price: 20_000,
-      pay_on: (支払依頼1.bill_on + 1.month).end_of_month
+      billing_agency_state: 'none'
 
     支払依頼2 = 発注.bills.last
 
@@ -845,23 +827,18 @@ RSpec.describe '全部' do
       price: nil,
       bill_on: nil
 
-    step 'プラットフォームが元請へ請求書送付', プラットフォーム, 支払依頼1
+    支払1 = 支払依頼1.receivables[0]
 
-    check 支払依頼1,
-      state: 'billed',
-      billing_agency_state: 'sent'
+    check 支払1,
+      state: 'will_pay',
+      orderer: 元請_決済代行なし,
+      company: 下請,
+      price: 20_000,
+      pay_on: Time.zone.today.next_month.end_of_month
 
-    # NOTE: システム上では特に行うことは無いため、コメントアウト
-    # step 'プラットフォームが入金予定取り込み', プラットフォーム
+    step '元請が下請への入金指示', 元請_決済代行なし, 支払1
 
-    step '元請がプラットフォームへの入金指示', 元請, 支払2
-
-    check 支払2.reload,
-      state: 'paid'
-
-    step 'プラットフォームが支払予定取り込み', プラットフォーム
-
-    check 支払1.reload,
+    check 支払1,
       state: 'paid'
 
     step '下請が完工報告', 下請, 発注
@@ -869,67 +846,43 @@ RSpec.describe '全部' do
     check 発注,
       construction_state: 'completed'
 
-    step '元請が完工を承認', 元請, 発注
+    step '元請が完工を承認', 元請_決済代行なし, 発注
 
     check 発注,
       construction_state: 'completion_approved'
 
-
-    step '元請が請求金額を入力', 元請, 支払依頼2, price: 25_000
+    step '元請が請求金額を入力', 元請_決済代行なし, 支払依頼2, price: 25_000
 
     check 支払依頼2,
       price: 25_000
 
-    step '元請が金額確定', 元請, 支払依頼2, bill_on: Date.today.next_month
+    step '元請が金額確定', 元請_決済代行なし, 支払依頼2, bill_on: Date.today.next_month.end_of_month
 
     check 支払依頼2,
       state: 'determined',
       price: 25_000,
-      bill_on: Date.today.next_month
+      bill_on: Date.today.next_month.end_of_month
 
     step '下請が請求を確定', 下請, 支払依頼2,
-      orderer: 元請,
+      orderer: 元請_決済代行なし,
       company: 下請
-
 
     check 支払依頼2,
       state: 'billed',
-      billing_agency_state: 'waiting'
+      billing_agency_state: 'none'
 
-    支払3 = 支払依頼2.receivables.first
-    支払4 = 支払依頼2.receivables.last
+    支払2 = 支払依頼2.receivables.first
 
-    check 支払3,
+    check 支払2,
       state: 'will_pay',
-      orderer: プラットフォーム,
+      orderer: 元請_決済代行なし,
       company: 下請,
       price: 25_000,
       pay_on: (支払依頼2.bill_on + 1.month).end_of_month
 
-    check 支払4,
-      state: 'will_pay',
-      orderer: 元請,
-      company: プラットフォーム,
-      price: 25_000,
-      pay_on: (支払依頼2.bill_on + 1.month).end_of_month
+    step '元請が下請への入金指示', 元請_決済代行なし, 支払2
 
-    step 'プラットフォームが元請へ請求書送付', プラットフォーム, 支払依頼2
-
-    check 支払依頼2,
-      state: 'billed',
-      billing_agency_state: 'sent'
-
-    # NOTE: システム上では特に行うことは無いため、コメントアウト
-    # step 'プラットフォームが入金予定取り込み', プラットフォーム
-
-    step '元請がプラットフォームへの入金指示', 元請, 支払4
-
-    check 支払4.reload,
-      state: 'paid'
-
-    step 'プラットフォームが支払予定取り込み', プラットフォーム
-
-    check 支払3.reload,
+    check 支払2,
       state: 'paid'
   end
 end
