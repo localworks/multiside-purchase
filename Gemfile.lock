@@ -205,7 +205,7 @@ GEM
     turnip (4.0.1)
       gherkin (~> 6.0.17)
       rspec (>= 3.0, < 4.0)
-    tzinfo (1.2.5)
+    tzinfo (1.2.10)
       thread_safe (~> 0.1)
     web-console (3.7.0)
       actionview (>= 5.0)
